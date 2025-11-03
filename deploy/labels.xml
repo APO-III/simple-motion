@@ -1,0 +1,23 @@
+<View>
+  <Labels name="action_labels" toName="video_player">
+    <Label value="Walking Towards Camera" background="#FF5A5A"/>
+    <Label value="Walking Away" background="#5AFFC3"/>
+    <Label value="Turning" background="#FFA65A"/>
+    <Label value="Sitting Down" background="#5A9EFF"/>
+    <Label value="Standing Up" background="#D45AFF"/>
+  </Labels>
+
+  <Video name="video_player" value="$video_url" sync="audio_player"/>
+
+  <Audio name="audio_player" value="$video_url" sync="video_player" hotkey="ctrl+m" />
+  
+  <Header value="Select the action being performed in the video segment"/>
+
+  <TimeSeriesLabels name="action" toName="video_player">
+    <Label value="Walking Towards Camera" background="#FF5A5A"/>
+    <Label value="Walking Away" background="#5AFFC3"/>
+    <Label value="Turning" background="#FFA65A"/>
+    <Label value="Sitting Down" background="#5A9EFF"/>
+    <Label value="Standing Up" background="#D45AFF"/>
+  </TimeSeriesLabels>
+</View>

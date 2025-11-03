@@ -3,6 +3,7 @@ from infrastructure.settings import settings
 from data_features.use_cases.features_service import FeaturesService
 from pose_processing.use_cases.pose_extraction_service import PoseExtractionService
 from orchestrator.motion_orchestrator import MotionOrchestrator
+from labels_reader.use_cases.label_studio_reader import LabelStudioReader
 
 
 class Container(containers.DeclarativeContainer):
@@ -16,7 +17,8 @@ class Container(containers.DeclarativeContainer):
         'debug': settings.debug,
         'log_level': settings.log_level,
         'model_confidence_threshold': settings.model_confidence_threshold,
-        'mediapipe_model_complexity': settings.mediapipe_model_complexity
+        'mediapipe_model_complexity': settings.mediapipe_model_complexity,
+        'target_fps': settings.target_fps
     })
 
     features_service = providers.Singleton(FeaturesService)
@@ -25,6 +27,8 @@ class Container(containers.DeclarativeContainer):
         PoseExtractionService,
         mediapipe_style=config.mediapipe_model_complexity
     )
+
+    label_studio_reader = providers.Singleton(LabelStudioReader)
 
     motion_orchestrator = providers.Singleton(
         MotionOrchestrator,

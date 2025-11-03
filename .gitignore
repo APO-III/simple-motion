@@ -74,3 +74,5 @@ output_validations/*.png
 output_validations/*.jpg
 !output_validations/.gitkeep
 !data/.gitkeep
+!data/test.mp4
+data/
