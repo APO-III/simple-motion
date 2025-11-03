@@ -1,4 +1,5 @@
 numpy==1.26.4
+opencv-python==4.9.0.80
 mediapipe==0.10.14
 dependency-injector==4.41.0
 python-dotenv==1.0.1

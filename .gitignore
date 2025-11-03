@@ -68,3 +68,9 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+
+# Output validations
+output_validations/*.png
+output_validations/*.jpg
+!output_validations/.gitkeep
+!data/.gitkeep
