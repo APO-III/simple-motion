@@ -147,10 +147,7 @@ class FeaturesService:
             right_hip, right_knee, right_ankle
         )
 
-        normalized_shoulder_distance = self.calculate_normalized_shoulder_distance(
-            left_shoulder, right_shoulder,
-            left_hip, right_hip
-        )
+
 
         shoulder_vector = self.calculate_normalized_shoulder_vector_xz(
             left_shoulder, right_shoulder
@@ -172,12 +169,9 @@ class FeaturesService:
 
         return MotionFeatures(
             normalized_leg_length=normalized_leg_length,
-            normalized_shoulder_distance=normalized_shoulder_distance,
             shoulder_vector_x=shoulder_vector[0],
-            shoulder_vector_y=shoulder_vector[1],
             shoulder_vector_z=shoulder_vector[2],
             ankle_vector_x=ankle_vector[0],
-            ankle_vector_y=ankle_vector[1],
             ankle_vector_z=ankle_vector[2],
             average_hip_angle=average_hip_angle,
             average_knee_angle=average_knee_angle

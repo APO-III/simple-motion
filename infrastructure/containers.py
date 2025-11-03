@@ -1,7 +1,7 @@
 from dependency_injector import containers, providers
 from infrastructure.settings import settings
 from data_features.use_cases.features_service import FeaturesService
-from mediapipe.use_cases.pose_extraction_service import PoseExtractionService
+from pose_processing.use_cases.pose_extraction_service import PoseExtractionService
 from orchestrator.motion_orchestrator import MotionOrchestrator
 
 

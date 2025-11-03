@@ -1,8 +1,7 @@
 import cv2
 import mediapipe as mp
 from typing import List, Optional, Tuple
-from mediapipe.python.solutions import pose as mp_pose
-from mediapipe.domain.pose_landmarks import PoseLandmarks, LandmarkPoint
+from pose_processing.domain.pose_landmarks import PoseLandmarks, LandmarkPoint
 import numpy as np
 
 

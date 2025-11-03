@@ -3,8 +3,8 @@ import numpy as np
 from typing import Dict, List
 from pathlib import Path
 from data_features.use_cases.features_service import FeaturesService
-from mediapipe.use_cases.pose_extraction_service import PoseExtractionService
-from mediapipe.domain.pose_landmarks import PoseLandmarks
+from pose_processing.use_cases.pose_extraction_service import PoseExtractionService
+from pose_processing.domain.pose_landmarks import PoseLandmarks
 from data_features.domain.motion_features import MotionFeatures
 
 
@@ -128,47 +128,83 @@ class MotionOrchestrator:
 
     def _generate_visualization(
         self,
+        frame: np.ndarray,
         frame_number: int,
+        pose_landmarks: PoseLandmarks,
         motion_features: MotionFeatures,
         output_dir: str = "output_validations"
     ):
         """
-        Generate visualization image with feature labels.
+        Generate visualization image with landmarks and feature labels.
 
         Args:
+            frame: Original video frame
             frame_number: Frame number
+            pose_landmarks: PoseLandmarks with landmark coordinates
             motion_features: MotionFeatures object to visualize
             output_dir: Output directory for images
         """
-        img_height = 800
-        img_width = 600
-        img = np.ones((img_height, img_width, 3), dtype=np.uint8) * 255
+        import mediapipe as mp
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.6
-        font_color = (0, 0, 0)
-        line_height = 35
-        start_y = 50
+        mp_drawing = mp.solutions.drawing_utils
+        mp_pose = mp.solutions.pose
 
-        title = f"Frame: {frame_number}"
-        cv2.putText(img, title, (20, start_y), font, 1.0, (0, 0, 255), 2)
+        img = frame.copy()
+        img_height, img_width = img.shape[:2]
 
-        features_text = [
-            f"Normalized Leg Length: {motion_features.normalized_leg_length:.4f}",
-            f"Normalized Shoulder Dist: {motion_features.normalized_shoulder_distance:.4f}",
-            f"Shoulder Vector X: {motion_features.shoulder_vector_x:.4f}",
-            f"Shoulder Vector Y: {motion_features.shoulder_vector_y:.4f}",
-            f"Shoulder Vector Z: {motion_features.shoulder_vector_z:.4f}",
-            f"Ankle Vector X: {motion_features.ankle_vector_x:.4f}",
-            f"Ankle Vector Y: {motion_features.ankle_vector_y:.4f}",
-            f"Ankle Vector Z: {motion_features.ankle_vector_z:.4f}",
-            f"Average Hip Angle: {motion_features.average_hip_angle:.2f} deg",
-            f"Average Knee Angle: {motion_features.average_knee_angle:.2f} deg"
+        # Draw landmarks on the frame
+        for idx, landmark in enumerate(pose_landmarks.landmarks):
+            x = int(landmark.x * img_width)
+            y = int(landmark.y * img_height)
+            cv2.circle(img, (x, y), 5, (0, 255, 0), -1)
+
+        # Draw connections between landmarks
+        connections = [
+            (self.LEFT_SHOULDER, self.LEFT_HIP),
+            (self.RIGHT_SHOULDER, self.RIGHT_HIP),
+            (self.LEFT_HIP, self.LEFT_KNEE),
+            (self.RIGHT_HIP, self.RIGHT_KNEE),
+            (self.LEFT_KNEE, self.LEFT_ANKLE),
+            (self.RIGHT_KNEE, self.RIGHT_ANKLE),
+            (self.LEFT_SHOULDER, self.RIGHT_SHOULDER),
+            (self.LEFT_HIP, self.RIGHT_HIP)
         ]
 
-        y_position = start_y + 60
+        for connection in connections:
+            start_idx, end_idx = connection
+            start = pose_landmarks.landmarks[start_idx]
+            end = pose_landmarks.landmarks[end_idx]
+
+            start_point = (int(start.x * img_width), int(start.y * img_height))
+            end_point = (int(end.x * img_width), int(end.y * img_height))
+
+            cv2.line(img, start_point, end_point, (255, 0, 0), 2)
+
+        # Add feature text overlay
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.5
+        font_color = (255, 255, 255)
+        bg_color = (0, 0, 0)
+        line_height = 25
+        start_y = 30
+
+        features_text = [
+            f"Frame: {frame_number}",
+            f"Leg Length: {motion_features.normalized_leg_length:.3f}",
+            f"Shoulder Vec X: {motion_features.shoulder_vector_x:.3f}",
+            f"Shoulder Vec Z: {motion_features.shoulder_vector_z:.3f}",
+            f"Ankle Vec X: {motion_features.ankle_vector_x:.3f}",
+            f"Ankle Vec Z: {motion_features.ankle_vector_z:.3f}",
+            f"Hip Angle: {motion_features.average_hip_angle:.1f}deg",
+            f"Knee Angle: {motion_features.average_knee_angle:.1f}deg"
+        ]
+
+        y_position = start_y
         for text in features_text:
-            cv2.putText(img, text, (20, y_position), font, font_scale, font_color, 1)
+            text_size = cv2.getTextSize(text, font, font_scale, 1)[0]
+            cv2.rectangle(img, (5, y_position - 20),
+                         (text_size[0] + 15, y_position + 5), bg_color, -1)
+            cv2.putText(img, text, (10, y_position), font, font_scale, font_color, 1)
             y_position += line_height
 
         output_path = Path(output_dir)
@@ -198,6 +234,15 @@ class MotionOrchestrator:
         Returns:
             Dictionary mapping frame numbers to MotionFeatures
         """
+        # Clear output directory if generating visualizations
+        if generate_visualizations:
+            import shutil
+            output_path = Path(output_dir)
+            if output_path.exists():
+                shutil.rmtree(output_path)
+            output_path.mkdir(parents=True, exist_ok=True)
+
+        # Extract pose landmarks from video
         pose_landmarks_list = self.pose_extraction_service.extract_landmarks_from_video(
             video_path=video_path,
             target_fps=target_fps,
@@ -206,12 +251,48 @@ class MotionOrchestrator:
 
         features_map = {}
 
-        for pose_landmarks in pose_landmarks_list:
-            motion_features = self._calculate_features_from_landmarks(pose_landmarks)
-            frame_number = pose_landmarks.frame_number
-            features_map[frame_number] = motion_features
+        # If visualizations needed, read video frames
+        if generate_visualizations:
+            cap = cv2.VideoCapture(video_path)
+            original_fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_interval = max(1, int(original_fps / target_fps))
 
-            if generate_visualizations:
-                self._generate_visualization(frame_number, motion_features, output_dir)
+            video_frame_count = 0
+            sampled_frame_count = 0
+            frames_dict = {}
+
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                if video_frame_count % frame_interval == 0:
+                    frames_dict[sampled_frame_count] = frame
+                    sampled_frame_count += 1
+
+                video_frame_count += 1
+
+            cap.release()
+
+            # Process landmarks and generate visualizations
+            for pose_landmarks in pose_landmarks_list:
+                motion_features = self._calculate_features_from_landmarks(pose_landmarks)
+                frame_number = pose_landmarks.frame_number
+                features_map[frame_number] = motion_features
+
+                if frame_number in frames_dict:
+                    self._generate_visualization(
+                        frame=frames_dict[frame_number],
+                        frame_number=frame_number,
+                        pose_landmarks=pose_landmarks,
+                        motion_features=motion_features,
+                        output_dir=output_dir
+                    )
+        else:
+            # Process without visualizations
+            for pose_landmarks in pose_landmarks_list:
+                motion_features = self._calculate_features_from_landmarks(pose_landmarks)
+                frame_number = pose_landmarks.frame_number
+                features_map[frame_number] = motion_features
 
         return features_map
