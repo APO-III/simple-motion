@@ -76,3 +76,8 @@ output_validations/*.jpg
 !data/.gitkeep
 !data/test.mp4
 data/
+
+# Output files
+output/
+*.csv
+*.json

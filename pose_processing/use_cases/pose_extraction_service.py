@@ -56,7 +56,7 @@ class PoseExtractionService:
 
         return landmarks, world_landmarks
 
-    def extract_landmarks_from_video(
+    def     extract_landmarks_from_video(
         self,
         video_path: str,
         target_fps: float,
@@ -82,7 +82,9 @@ class PoseExtractionService:
             raise ValueError(f"Cannot open video file: {video_path}")
 
         original_fps = cap.get(cv2.CAP_PROP_FPS)
+        print(f"Original FPS: {original_fps}")
         frame_interval = max(1, int(original_fps / target_fps))
+        print(f"Frame Interval: {frame_interval}")
 
         pose_landmarks_list = []
         frame_count = 0

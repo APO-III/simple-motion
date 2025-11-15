@@ -4,7 +4,7 @@ from data_features.use_cases.features_service import FeaturesService
 from pose_processing.use_cases.pose_extraction_service import PoseExtractionService
 from orchestrator.motion_orchestrator import MotionOrchestrator
 from labels_reader.use_cases.label_studio_reader import LabelStudioReader
-
+from orchestrator.utils.csv_exporter import CSVExporter 
 
 class Container(containers.DeclarativeContainer):
     """
@@ -33,5 +33,10 @@ class Container(containers.DeclarativeContainer):
     motion_orchestrator = providers.Singleton(
         MotionOrchestrator,
         pose_extraction_service=pose_extraction_service,
-        features_service=features_service
+        features_service=features_service,
+        label_reader=label_studio_reader
+    )
+    
+    exporter = providers.Factory(
+        CSVExporter
     )

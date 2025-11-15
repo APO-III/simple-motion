@@ -6,6 +6,8 @@ from data_features.use_cases.features_service import FeaturesService
 from pose_processing.use_cases.pose_extraction_service import PoseExtractionService
 from pose_processing.domain.pose_landmarks import PoseLandmarks
 from data_features.domain.motion_features import MotionFeatures
+from orchestrator.domain.labeled_motion_features import LabeledMotionFeatures
+from labels_reader.use_cases.label_studio_reader import LabelStudioReader
 
 
 class MotionOrchestrator:
@@ -26,7 +28,8 @@ class MotionOrchestrator:
     def __init__(
         self,
         pose_extraction_service: PoseExtractionService,
-        features_service: FeaturesService
+        features_service: FeaturesService,
+        label_reader: LabelStudioReader
     ):
         """
         Initialize MotionOrchestrator.
@@ -37,6 +40,7 @@ class MotionOrchestrator:
         """
         self.pose_extraction_service = pose_extraction_service
         self.features_service = features_service
+        self.label_reader = label_reader
 
     def _extract_landmark_coordinates(
         self,
@@ -216,7 +220,7 @@ class MotionOrchestrator:
     def process_video(
         self,
         video_path: str,
-        target_fps: float = 10.0,
+        target_fps: float = 23.0,
         video_id: str = None,
         generate_visualizations: bool = False,
         output_dir: str = "output_validations"
@@ -236,6 +240,7 @@ class MotionOrchestrator:
         """
         # Clear output directory if generating visualizations
         if generate_visualizations:
+            print("  Preparing output directory for visualizations...")
             import shutil
             output_path = Path(output_dir)
             if output_path.exists():
@@ -249,10 +254,12 @@ class MotionOrchestrator:
             video_id=video_id
         )
 
+        print(f"  Extracted pose landmarks for {len(pose_landmarks_list)} frames")
         features_map = {}
 
         # If visualizations needed, read video frames
         if generate_visualizations:
+            print("  Processing frames with visualizations...")
             cap = cv2.VideoCapture(video_path)
             original_fps = cap.get(cv2.CAP_PROP_FPS)
             frame_interval = max(1, int(original_fps / target_fps))
@@ -289,6 +296,7 @@ class MotionOrchestrator:
                         output_dir=output_dir
                     )
         else:
+            print("  Processing frames without visualizations...")
             # Process without visualizations
             for pose_landmarks in pose_landmarks_list:
                 motion_features = self._calculate_features_from_landmarks(pose_landmarks)
@@ -296,3 +304,99 @@ class MotionOrchestrator:
                 features_map[frame_number] = motion_features
 
         return features_map
+
+    def process_videos_with_labels(
+        self,
+        labels_json_path: str,
+        videos_dir: str,
+        target_fps: float = 10.0,
+        generate_visualizations: bool = False,
+        output_base_dir: str = "output_validations"
+    ) -> List[LabeledMotionFeatures]:
+        """
+        Process multiple videos with their activity labels.
+
+        Args:
+            labels_json_path: Path to Label Studio JSON with annotations
+            videos_dir: Directory containing video files
+            target_fps: Sampling rate for frame extraction
+            generate_visualizations: Generate visualization images per video
+            output_base_dir: Base directory for visualization outputs
+
+        Returns:
+            List of LabeledMotionFeatures containing features and labels for all frames
+        """
+        
+        # Load labels and video files
+        labels_dataset, video_files = self.label_reader.load_dataset(
+            videos_dir=videos_dir,
+            labels_json_path=labels_json_path
+        )
+
+        print(f"Loaded {len(labels_dataset.get_all_video_ids())} video annotations")
+        print(f"Found {len(video_files)} video files in directory")
+        
+        labeled_features_list: List[LabeledMotionFeatures] = []
+
+        # Process each annotated video
+        for video_id in labels_dataset.get_all_video_ids():
+            # Check if video file exists
+            if video_id not in video_files:
+                print(f"Warning: Video file not found for '{video_id}', skipping...")
+                continue
+
+            video_path = video_files[video_id]
+            video_annotation = labels_dataset.get_video_annotation(video_id)
+
+            print(f"\nProcessing video: {video_id}")
+            print(f"  Path: {video_path}")
+            print(f"  Frame ranges total quantity: {len(video_annotation.frame_ranges)}")
+            
+
+            # Set output directory for this video
+            video_output_dir = f"{output_base_dir}/{video_id}" if generate_visualizations else None
+
+            # Extract motion features for all frames
+            features_map = self.process_video(
+                video_path=video_path,
+                target_fps=target_fps,
+                video_id=video_id,
+                generate_visualizations=generate_visualizations,
+                output_dir=video_output_dir if video_output_dir else "output_validations"
+            )
+
+            print(f"  Extracted features for {len(features_map)} frames")
+
+            # Match features with labels
+            labeled_count = 0
+            unlabeled_count = 0
+
+            for frame_number, motion_features in features_map.items():
+                # Get label for this frame (if exists)
+                activity_label = video_annotation.get_label_for_frame(frame_number)
+
+                # Create labeled motion features object
+                labeled_features = LabeledMotionFeatures(
+                    motion_features=motion_features,
+                    activity_label=activity_label,
+                    video_id=video_id,
+                    frame_number=frame_number
+                )
+
+                labeled_features_list.append(labeled_features)
+
+                if activity_label:
+                    labeled_count += 1
+                else:
+                    unlabeled_count += 1
+
+            print(f"  Labeled frames: {labeled_count}")
+            print(f"  Unlabeled frames: {unlabeled_count}")
+
+        print(f"\n{'='*60}")
+        print(f"Processing complete!")
+        print(f"Total labeled features: {len(labeled_features_list)}")
+        print(f"Videos processed: {len([vid for vid in labels_dataset.get_all_video_ids() if vid in video_files])}")
+        print(f"{'='*60}")
+
+        return labeled_features_list
